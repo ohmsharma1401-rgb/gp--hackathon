@@ -1,0 +1,30 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment & Dependencies
+venv/
+.venv/
+env/
+node_modules/
+.env
+
+# Build outputs
+frontend/dist/
+frontend/build/
+*.egg-info/
+.dist/
+
+# IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Large weights / caches
+*.pt
+*.onnx
+*.engine
