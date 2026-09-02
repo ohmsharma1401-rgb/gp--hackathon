@@ -12,6 +12,8 @@ export default function TrafficAnalyticsPage({ analyticsList, analyticsSummary }
   let totalMotorcycles = 0;
   let totalBuses = 0;
   let totalTrucks = 0;
+  let totalRickshaws = 0;
+  let totalAmbiguous = 0;
 
   if (Array.isArray(analyticsList)) {
     analyticsList.forEach((an) => {
@@ -20,14 +22,17 @@ export default function TrafficAnalyticsPage({ analyticsList, analyticsSummary }
       totalMotorcycles += breakdown.motorcycles || 0;
       totalBuses += breakdown.buses || 0;
       totalTrucks += breakdown.trucks || 0;
+      totalRickshaws += breakdown.auto_rickshaws || 0;
+      totalAmbiguous += breakdown.ambiguous_vehicles || 0;
     });
   }
 
-  const grandTotalTracked = totalCars + totalMotorcycles + totalBuses + totalTrucks;
+  const grandTotalTracked = totalCars + totalMotorcycles + totalBuses + totalTrucks + totalRickshaws + totalAmbiguous;
   const carPct = grandTotalTracked > 0 ? Math.round((totalCars / grandTotalTracked) * 100) : 0;
   const motoPct = grandTotalTracked > 0 ? Math.round((totalMotorcycles / grandTotalTracked) * 100) : 0;
   const busPct = grandTotalTracked > 0 ? Math.round((totalBuses / grandTotalTracked) * 100) : 0;
   const truckPct = grandTotalTracked > 0 ? Math.round((totalTrucks / grandTotalTracked) * 100) : 0;
+  const rickshawPct = grandTotalTracked > 0 ? Math.round((totalRickshaws / grandTotalTracked) * 100) : 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -36,14 +41,14 @@ export default function TrafficAnalyticsPage({ analyticsList, analyticsSummary }
         <div>
           <h2 className="text-base font-bold text-[#12355B] uppercase tracking-wider flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-[#1976D2]" />
-            Smart City Traffic Analytics & Flow Visualization
+            Smart City Traffic Analytics & Class Visualization
           </h2>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Aggregated traffic statistics, vehicle class distribution, and camera comparison
+            Aggregated traffic statistics across Cars, Motorcycles, Buses, Trucks, and Auto-Rickshaws (🛺)
           </p>
         </div>
         <span className="px-3 py-1.5 text-xs font-mono font-semibold bg-blue-50 text-blue-800 border border-blue-200 rounded-lg">
-          Live Telemetry Active
+          Temporal Voting Active
         </span>
       </div>
 
@@ -112,14 +117,25 @@ export default function TrafficAnalyticsPage({ analyticsList, analyticsSummary }
               </div>
             </div>
 
+            {/* Auto-Rickshaws (🛺) */}
+            <div>
+              <div className="flex justify-between text-xs mb-1.5 font-semibold">
+                <span className="text-slate-700 flex items-center gap-1.5">🛺 Auto Rickshaws</span>
+                <span className="text-slate-900 font-mono">{totalRickshaws} ({rickshawPct}%)</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div className="bg-amber-500 h-full rounded-full transition-all duration-500" style={{ width: `${rickshawPct}%` }} />
+              </div>
+            </div>
+
             {/* Buses */}
             <div>
               <div className="flex justify-between text-xs mb-1.5 font-semibold">
-                <span className="text-slate-700 flex items-center gap-1.5"><Bus className="w-4 h-4 text-amber-600" /> Buses</span>
+                <span className="text-slate-700 flex items-center gap-1.5"><Bus className="w-4 h-4 text-orange-600" /> Buses</span>
                 <span className="text-slate-900 font-mono">{totalBuses} ({busPct}%)</span>
               </div>
               <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div className="bg-amber-500 h-full rounded-full transition-all duration-500" style={{ width: `${busPct}%` }} />
+                <div className="bg-orange-500 h-full rounded-full transition-all duration-500" style={{ width: `${busPct}%` }} />
               </div>
             </div>
 
@@ -169,46 +185,6 @@ export default function TrafficAnalyticsPage({ analyticsList, analyticsSummary }
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Camera Comparison Table */}
-      <div className="bg-white border border-slate-200 p-5 rounded-2xl card-shadow space-y-4 overflow-x-auto">
-        <h3 className="text-sm font-bold text-[#12355B] uppercase tracking-wider">Per-Camera Analytics Comparison</h3>
-
-        {Array.isArray(analyticsList) && analyticsList.length > 0 ? (
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
-                <th className="p-3.5">Camera ID</th>
-                <th className="p-3.5">Active Vehicles</th>
-                <th className="p-3.5">Total Unique</th>
-                <th className="p-3.5">Flow Rate (VPM)</th>
-                <th className="p-3.5">Traffic Density</th>
-                <th className="p-3.5">Stationary Vehicles</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {analyticsList.map((an) => (
-                <tr key={an.camera_id} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-3.5 font-bold text-[#1976D2] font-mono">{an.camera_id}</td>
-                  <td className="p-3.5 font-bold text-slate-800 font-mono">{an.active_vehicles}</td>
-                  <td className="p-3.5 text-slate-600 font-mono">{an.total_unique_vehicles}</td>
-                  <td className="p-3.5 text-emerald-700 font-mono font-semibold">{an.flow_metrics?.vehicles_per_minute || 0.0} VPM</td>
-                  <td className="p-3.5">
-                    <span className="px-2.5 py-0.5 text-[11px] font-bold rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      {an.traffic_density}
-                    </span>
-                  </td>
-                  <td className="p-3.5 text-slate-600 font-mono">{an.stationary_vehicles?.length || 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="p-8 text-center text-slate-500 text-xs">
-            No camera analytics streams currently connected. Start streams in Live Cameras tab.
-          </div>
-        )}
       </div>
     </div>
   );

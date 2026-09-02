@@ -8,11 +8,13 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 class VehicleTrack:
+    """
+    Represents a single ByteTrack vehicle track history.
+    Implements Temporal Class Voting to eliminate per-frame class flickering.
+    """
     def __init__(self, camera_id: str, track_id: int, vehicle_type: str, confidence: float, bbox: List[int], timestamp: str):
         self.camera_id = camera_id
         self.track_id = track_id
-        self.vehicle_type = vehicle_type
-        self.confidence = confidence
         self.latest_bbox = bbox
         self.first_seen_timestamp = timestamp
         self.last_seen_timestamp = timestamp
@@ -20,14 +22,27 @@ class VehicleTrack:
         self.detection_count = 1
         self.status = "ACTIVE"  # ACTIVE or INACTIVE
 
-    def update(self, vehicle_type: str, confidence: float, bbox: List[int], timestamp: str):
+        # Temporal Voting per track across frames
+        self.class_votes: Dict[str, int] = {vehicle_type: 1}
+        self.confidence_sum: Dict[str, float] = {vehicle_type: confidence}
         self.vehicle_type = vehicle_type
         self.confidence = confidence
+
+    def update(self, vehicle_type: str, confidence: float, bbox: List[int], timestamp: str):
         self.latest_bbox = bbox
         self.last_seen_timestamp = timestamp
         self.last_seen_epoch = time.time()
         self.detection_count += 1
         self.status = "ACTIVE"
+
+        # Record temporal vote
+        self.class_votes[vehicle_type] = self.class_votes.get(vehicle_type, 0) + 1
+        self.confidence_sum[vehicle_type] = self.confidence_sum.get(vehicle_type, 0.0) + confidence
+
+        # Majority voting for stable track classification
+        stable_type = max(self.class_votes, key=self.class_votes.get)
+        self.vehicle_type = stable_type
+        self.confidence = self.confidence_sum[stable_type] / float(self.class_votes[stable_type])
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -39,6 +54,7 @@ class VehicleTrack:
             "first_seen_timestamp": self.first_seen_timestamp,
             "last_seen_timestamp": self.last_seen_timestamp,
             "detection_count": self.detection_count,
+            "class_votes": dict(self.class_votes),
             "status": self.status
         }
 

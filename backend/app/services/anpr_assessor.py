@@ -219,13 +219,23 @@ class ANPRCameraAssessor:
             ocr_success_rate=ocr_rate
         )
 
+        from app.services.anpr_status_engine import anpr_status_engine
+        anpr_status_info = anpr_status_engine.evaluate_camera_anpr_status(
+            camera_id=cam_id,
+            plate_candidates_count=plate_candidates_count,
+            best_resolution_px=best_ph,
+            best_quality_score=score_res["total_score"],
+            ocr_attempts_count=ocr_attempts,
+            confirmed_plates_count=ocr_successes
+        )
+
         # Save Visual Debug Representative Image
         debug_img_path = None
         if annotated_sample_frame is not None or frame is not None:
             disp_frame = annotated_sample_frame if annotated_sample_frame is not None else frame.copy()
             # Overlay Banner
-            banner_text = f"{cam_id.upper()} | ANPR SUITABILITY: {score_res['total_score']}/100 | {score_res['classification']}"
-            cv2.rectangle(disp_frame, (0, 0), (700, 32), (0, 0, 0), -1)
+            banner_text = f"{cam_id.upper()} | STATUS: {anpr_status_info['anpr_status']} | SCORE: {score_res['total_score']}/100"
+            cv2.rectangle(disp_frame, (0, 0), (750, 32), (0, 0, 0), -1)
             cv2.putText(disp_frame, banner_text, (12, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2, cv2.LINE_AA)
 
             scratch_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scratch")
@@ -247,6 +257,8 @@ class ANPRCameraAssessor:
             "ocr_attempts": ocr_attempts,
             "ocr_successes": ocr_successes,
             "anpr_score": score_res["total_score"],
+            "anpr_status": anpr_status_info["anpr_status"],
+            "rationale": anpr_status_info["rationale"],
             "classification": score_res["classification"],
             "score_breakdown": score_res["breakdown"],
             "debug_image": debug_img_path,

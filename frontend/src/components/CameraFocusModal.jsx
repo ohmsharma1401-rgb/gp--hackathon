@@ -221,6 +221,14 @@ export default function CameraFocusModal({ camera, analytics, onClose, onToggleC
                     <span className="font-bold text-slate-800 font-mono">{classCounts.trucks || classCounts.truck || 0}</span>
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2 p-2.5 bg-white rounded-lg border border-slate-200 col-span-2">
+                  <span className="text-sm">🛺</span>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Auto Rickshaws</span>
+                    <span className="font-bold text-amber-600 font-mono">{classCounts.auto_rickshaws || classCounts.auto_rickshaw || 0}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

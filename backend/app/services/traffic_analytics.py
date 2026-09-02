@@ -23,11 +23,14 @@ class CameraTrafficAnalytics:
     """
     Maintains real-time traffic statistics, vehicle class counting, active track state,
     stationary vehicle detection, and event management per camera feed.
+    Supports Phase 11 6-class tracking: car, motorcycle, bus, truck, auto_rickshaw, ambiguous.
     """
     def __init__(self, camera_id: str):
         self.camera_id = camera_id
         self.seen_track_ids: Set[int] = set()
-        self.vehicle_type_counts: Dict[str, int] = {"car": 0, "motorcycle": 0, "bus": 0, "truck": 0}
+        self.vehicle_type_counts: Dict[str, int] = {
+            "car": 0, "motorcycle": 0, "bus": 0, "truck": 0, "auto_rickshaw": 0, "ambiguous": 0
+        }
         
         # Track lifecycle history: track_id -> metadata
         self.tracks_history: Dict[int, Dict[str, Any]] = {}
@@ -64,7 +67,6 @@ class CameraTrafficAnalytics:
 
         self.last_update_time = current_time
         current_active_ids: Set[int] = set()
-        active_class_counts: Dict[str, int] = {"car": 0, "motorcycle": 0, "bus": 0, "truck": 0}
 
         for d in detections:
             tid = d.get("track_id")
@@ -73,15 +75,14 @@ class CameraTrafficAnalytics:
 
             current_active_ids.add(tid)
             vtype = d.get("vehicle_type", "car").lower()
-            if vtype not in active_class_counts:
+            if vtype not in self.vehicle_type_counts:
                 vtype = "car"
 
-            active_class_counts[vtype] += 1
             bbox = d.get("bbox", [0, 0, 0, 0])
             cx = (bbox[0] + bbox[2]) / 2.0
             cy = (bbox[1] + bbox[3]) / 2.0
 
-            # 1. Unique Vehicle Counting
+            # 1. Unique Vehicle Counting & Track History Update
             if tid not in self.seen_track_ids:
                 self.seen_track_ids.add(tid)
                 self.vehicle_type_counts[vtype] = self.vehicle_type_counts.get(vtype, 0) + 1
@@ -102,6 +103,14 @@ class CameraTrafficAnalytics:
                 }
             else:
                 tinfo = self.tracks_history[tid]
+                old_vtype = tinfo["vehicle_type"]
+                
+                # Update vehicle_type if temporal voting changed it
+                if old_vtype != vtype:
+                    self.vehicle_type_counts[old_vtype] = max(0, self.vehicle_type_counts.get(old_vtype, 1) - 1)
+                    self.vehicle_type_counts[vtype] = self.vehicle_type_counts.get(vtype, 0) + 1
+                    tinfo["vehicle_type"] = vtype
+
                 tinfo["last_seen"] = current_time
                 tinfo["detection_count"] += 1
                 tinfo["latest_bbox"] = bbox
@@ -157,6 +166,8 @@ class CameraTrafficAnalytics:
         active_motos = sum(1 for t in self.active_tracks.values() if t["vehicle_type"] == "motorcycle")
         active_buses = sum(1 for t in self.active_tracks.values() if t["vehicle_type"] == "bus")
         active_trucks = sum(1 for t in self.active_tracks.values() if t["vehicle_type"] == "truck")
+        active_rickshaws = sum(1 for t in self.active_tracks.values() if t["vehicle_type"] == "auto_rickshaw")
+        active_ambiguous = sum(1 for t in self.active_tracks.values() if t["vehicle_type"] == "ambiguous")
 
         # Class Distribution %
         if total_unique > 0:
@@ -164,10 +175,12 @@ class CameraTrafficAnalytics:
                 "car": round((self.vehicle_type_counts.get("car", 0) / float(total_unique)) * 100.0, 1),
                 "motorcycle": round((self.vehicle_type_counts.get("motorcycle", 0) / float(total_unique)) * 100.0, 1),
                 "bus": round((self.vehicle_type_counts.get("bus", 0) / float(total_unique)) * 100.0, 1),
-                "truck": round((self.vehicle_type_counts.get("truck", 0) / float(total_unique)) * 100.0, 1)
+                "truck": round((self.vehicle_type_counts.get("truck", 0) / float(total_unique)) * 100.0, 1),
+                "auto_rickshaw": round((self.vehicle_type_counts.get("auto_rickshaw", 0) / float(total_unique)) * 100.0, 1),
+                "ambiguous": round((self.vehicle_type_counts.get("ambiguous", 0) / float(total_unique)) * 100.0, 1)
             }
         else:
-            dist = {"car": 0.0, "motorcycle": 0.0, "bus": 0.0, "truck": 0.0}
+            dist = {"car": 0.0, "motorcycle": 0.0, "bus": 0.0, "truck": 0.0, "auto_rickshaw": 0.0, "ambiguous": 0.0}
 
         # Flow Metrics
         elapsed_min = max(0.1, (time.time() - self.start_time) / 60.0)
@@ -191,14 +204,18 @@ class CameraTrafficAnalytics:
                 "cars": self.vehicle_type_counts.get("car", 0),
                 "motorcycles": self.vehicle_type_counts.get("motorcycle", 0),
                 "buses": self.vehicle_type_counts.get("bus", 0),
-                "trucks": self.vehicle_type_counts.get("truck", 0)
+                "trucks": self.vehicle_type_counts.get("truck", 0),
+                "auto_rickshaws": self.vehicle_type_counts.get("auto_rickshaw", 0),
+                "ambiguous_vehicles": self.vehicle_type_counts.get("ambiguous", 0)
             },
             "active_vehicles": active_vehicles,
             "active_vehicle_breakdown": {
                 "active_cars": active_cars,
                 "active_motorcycles": active_motos,
                 "active_buses": active_buses,
-                "active_trucks": active_trucks
+                "active_trucks": active_trucks,
+                "active_auto_rickshaws": active_rickshaws,
+                "active_ambiguous_vehicles": active_ambiguous
             },
             "traffic_density": self.classify_density(active_vehicles),
             "distribution_percentage": dist,

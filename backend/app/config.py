@@ -12,19 +12,26 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
-    # YOLO Configuration
+    # YOLO & Tracking Configuration (Phase 11 Optimized)
     YOLO_MODEL_NAME: str = "yolov8n.pt"
-    YOLO_CONFIDENCE_THRESHOLD: float = 0.35
-    YOLO_FRAME_INTERVAL: int = 5
+    YOLO_CONFIDENCE_THRESHOLD: float = 0.30
+    YOLO_IOU_THRESHOLD: float = 0.45
+    YOLO_IMAGE_SIZE: int = 960
+    YOLO_FRAME_INTERVAL: int = 3
     YOLO_DEVICE: str = "auto"  # auto, cuda, cpu
     YOLO_TRACKER: str = "bytetrack.yaml"
     TRACK_INACTIVE_TIMEOUT_SECONDS: float = 10.0
 
-    # ANPR Configuration (Phase 7)
+    # Auto-Rickshaw Classification Configuration (Phase 11)
+    AUTO_RICKSHAW_CONFIDENCE_THRESHOLD: float = 0.75
+    TEMPORAL_VOTE_MIN_FRAMES: int = 3
+
+    # ANPR Configuration (Phase 11)
     ANPR_ENABLE: bool = True
     ANPR_MAX_CANDIDATES_PER_TRACK: int = 5
     ANPR_MIN_CONFIDENCE: float = 0.45
     ANPR_USE_GPU: bool = True
+    ANPR_MIN_PLATE_CHAR_HEIGHT: int = 25
 
     class Config:
         env_file = ".env"

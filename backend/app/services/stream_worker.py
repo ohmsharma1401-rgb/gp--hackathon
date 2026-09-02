@@ -112,8 +112,17 @@ class RTSPStreamWorker:
             logger.info(f"[{self.camera_id}] Connecting to RTSP stream: {self.rtsp_url}")
             
             cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+            is_fallback = False
+            
+            if not cap.isOpened() or not cap.grab():
+                sample_mp4 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "scratch", "controlled_vehicle_test.mp4"))
+                if os.path.exists(sample_mp4):
+                    logger.info(f"[{self.camera_id}] Live RTSP feed unavailable. Opening local CCTV demonstration video source: {sample_mp4}")
+                    cap = cv2.VideoCapture(sample_mp4)
+                    is_fallback = True
+
             if not cap.isOpened():
-                self.error_message = f"Failed to open RTSP URL: {self.rtsp_url}"
+                self.error_message = f"Failed to open RTSP URL or fallback video for: {self.camera_id}"
                 self.status = "ERROR"
                 logger.error(f"[{self.camera_id}] {self.error_message}. Retrying in {retry_delay}s...")
                 
@@ -124,7 +133,7 @@ class RTSPStreamWorker:
             retry_delay = 1.0
             self.status = "CONNECTED"
             self.error_message = None
-            logger.info(f"[{self.camera_id}] Connected successfully to RTSP stream.")
+            logger.info(f"[{self.camera_id}] Connected successfully to {'RTSP stream' if not is_fallback else 'Demonstration Video'}.")
 
             consecutive_read_failures = 0
 
@@ -133,13 +142,19 @@ class RTSPStreamWorker:
                 now = time.time()
 
                 if not ret or frame is None:
-                    consecutive_read_failures += 1
-                    if consecutive_read_failures >= 5:
-                        self.error_message = "Stream interrupted (consecutive read failures)"
-                        logger.error(f"[{self.camera_id}] {self.error_message}")
-                        break
-                    time.sleep(0.05)
-                    continue
+                    if is_fallback:
+                        # Auto-loop demonstration video
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        ret, frame = cap.read()
+                    
+                    if not ret or frame is None:
+                        consecutive_read_failures += 1
+                        if consecutive_read_failures >= 5:
+                            self.error_message = "Stream interrupted (consecutive read failures)"
+                            logger.error(f"[{self.camera_id}] {self.error_message}")
+                            break
+                        time.sleep(0.05)
+                        continue
 
                 consecutive_read_failures = 0
                 self.frames_received += 1

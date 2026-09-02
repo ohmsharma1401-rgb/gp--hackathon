@@ -21,10 +21,12 @@ VEHICLE_CLASS_MAP = {
 
 # Color palette for bounding box visualization (BGR format)
 CLASS_COLORS = {
-    "car": (0, 225, 120),        # Emerald Green
-    "bus": (0, 180, 255),        # Amber / Orange
-    "truck": (255, 120, 0),      # Blue
-    "motorcycle": (255, 0, 220)  # Magenta / Purple
+    "car": (0, 225, 120),            # Emerald Green
+    "bus": (0, 180, 255),            # Amber / Orange
+    "truck": (255, 120, 0),          # Blue
+    "motorcycle": (255, 0, 220),      # Magenta / Purple
+    "auto_rickshaw": (0, 215, 255),  # Gold / Bright Yellow
+    "ambiguous": (160, 160, 160)     # Gray
 }
 
 PLATE_COLOR = (0, 255, 255)  # Bright Yellow for License Plate Bounding Box
@@ -176,6 +178,8 @@ class YOLOVehicleDetector:
             tracker=self.settings.YOLO_TRACKER,
             device=self.device,
             conf=conf_thresh,
+            iou=self.settings.YOLO_IOU_THRESHOLD,
+            imgsz=self.settings.YOLO_IMAGE_SIZE,
             classes=list(VEHICLE_CLASS_MAP.keys()),
             verbose=False
         )
@@ -197,6 +201,8 @@ class YOLOVehicleDetector:
         detections: List[Dict[str, Any]] = []
         annotated_frame = frame.copy()
 
+        from app.services.rickshaw_classifier import rickshaw_classifier
+
         if results and len(results) > 0:
             boxes = results[0].boxes
             for box in boxes:
@@ -205,11 +211,17 @@ class YOLOVehicleDetector:
                 xyxy = box.xyxy[0].cpu().numpy().tolist()
                 
                 track_id = int(box.id[0].item()) if box.id is not None else None
-                vehicle_type = VEHICLE_CLASS_MAP.get(cls_id, "vehicle")
+                primary_type = VEHICLE_CLASS_MAP.get(cls_id, "vehicle")
                 bbox_int = [int(v) for v in xyxy]
                 
+                # Secondary Rickshaw Classifier Evaluation (Confidence-Based)
+                vehicle_type, confidence = rickshaw_classifier.classify_vehicle_crop(
+                    frame, bbox_int, primary_type, confidence
+                )
+
                 if track_id is not None:
-                    track_manager.update_track(
+                    # Track Manager updates class with temporal voting across frames
+                    track_obj = track_manager.update_track(
                         camera_id=camera_id,
                         track_id=track_id,
                         vehicle_type=vehicle_type,
@@ -217,6 +229,8 @@ class YOLOVehicleDetector:
                         bbox=bbox_int,
                         timestamp=iso_timestamp
                     )
+                    # Use stable voted vehicle type for detections
+                    vehicle_type = track_obj.vehicle_type
 
                 # ANPR Integration (Phase 7.5): Modular Plate Detector (Primary Trained + Secondary Fallback)
                 anpr_result = None

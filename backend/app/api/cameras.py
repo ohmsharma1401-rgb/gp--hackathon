@@ -76,6 +76,38 @@ async def run_anpr_diagnostic_job(
 # PHASE 7.6 ANPR ASSESSMENT APIs
 # =====================================================================
 
+@router.get("/anpr-status")
+async def get_all_anpr_statuses():
+    """
+    PHASE 11 API: Return intelligent ANPR capability statuses across all cameras.
+    Statuses: ANPR_READY, ANPR_POTENTIAL, ANPR_LIMITED, ANPR_UNSUITABLE.
+    """
+    from app.services.anpr_status_engine import anpr_status_engine
+    assessment = anpr_assessor.latest_assessment
+    if not assessment:
+        assessment = await anpr_assessor.run_assessment_all_cameras(duration_per_camera=5)
+
+    results = assessment.get("results", [])
+    statuses = []
+    for r in results:
+        cid = r["camera_id"]
+        status_info = anpr_status_engine.evaluate_camera_anpr_status(
+            camera_id=cid,
+            plate_candidates_count=r.get("plate_candidates", 0),
+            best_resolution_px=r.get("best_plate_height", 0),
+            best_quality_score=r.get("anpr_score", 0.0),
+            ocr_attempts_count=r.get("ocr_attempts", 0),
+            confirmed_plates_count=r.get("ocr_successes", 0)
+        )
+        status_info["camera_name"] = r.get("camera_name", cid)
+        statuses.append(status_info)
+
+    return {
+        "status": "COMPLETED",
+        "total_cameras": len(statuses),
+        "cameras": statuses
+    }
+
 @router.get("/anpr-assessment")
 async def get_anpr_assessment():
     """
