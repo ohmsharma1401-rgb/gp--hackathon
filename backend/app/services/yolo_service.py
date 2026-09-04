@@ -19,6 +19,16 @@ VEHICLE_CLASS_MAP = {
     7: "truck"
 }
 
+# VisDrone Overhead Drone Class Map (Class 0 overhead person/small vehicle mapped to car for drone dataset)
+DEMO_VEHICLE_CLASS_MAP = {
+    0: "car",
+    1: "motorcycle",
+    2: "car",
+    3: "motorcycle",
+    5: "bus",
+    7: "truck"
+}
+
 # Color palette for bounding box visualization (BGR format)
 CLASS_COLORS = {
     "car": (0, 225, 120),            # Emerald Green
@@ -42,6 +52,8 @@ class YOLOVehicleDetector:
         self.device: str = "cpu"
         self.cuda_available: bool = False
         self.device_name: str = "CPU"
+        import threading
+        self._inference_lock = threading.Lock()
         
         # Performance Telemetry Metrics
         self.total_frames_processed: int = 0
@@ -92,13 +104,14 @@ class YOLOVehicleDetector:
         conf_thresh = self.settings.YOLO_CONFIDENCE_THRESHOLD
         iso_timestamp = datetime.now(timezone.utc).isoformat()
 
-        results = self.model.predict(
-            source=frame,
-            device=self.device,
-            conf=conf_thresh,
-            classes=list(VEHICLE_CLASS_MAP.keys()),
-            verbose=False
-        )
+        with self._inference_lock:
+            results = self.model.predict(
+                source=frame,
+                device=self.device,
+                conf=conf_thresh,
+                classes=list(VEHICLE_CLASS_MAP.keys()),
+                verbose=False
+            )
 
         latency_ms = (time.time() - start_time) * 1000.0
         self.last_latency_ms = latency_ms
@@ -168,21 +181,25 @@ class YOLOVehicleDetector:
             return {"camera_id": camera_id, "detections": [], "annotated_frame": frame, "latency_ms": 0.0}
 
         start_time = time.time()
-        conf_thresh = self.settings.YOLO_CONFIDENCE_THRESHOLD
         iso_timestamp = datetime.now(timezone.utc).isoformat()
         fh, fw = frame.shape[:2]
 
-        results = self.model.track(
-            source=frame,
-            persist=True,
-            tracker=self.settings.YOLO_TRACKER,
-            device=self.device,
-            conf=conf_thresh,
-            iou=self.settings.YOLO_IOU_THRESHOLD,
-            imgsz=self.settings.YOLO_IMAGE_SIZE,
-            classes=list(VEHICLE_CLASS_MAP.keys()),
-            verbose=False
-        )
+        is_demo = str(camera_id).startswith("CAM-DEMO-")
+        conf_thresh = 0.15 if is_demo else self.settings.YOLO_CONFIDENCE_THRESHOLD
+        target_class_map = DEMO_VEHICLE_CLASS_MAP if is_demo else VEHICLE_CLASS_MAP
+
+        with self._inference_lock:
+            results = self.model.track(
+                source=frame,
+                persist=True,
+                tracker=self.settings.YOLO_TRACKER,
+                device=self.device,
+                conf=conf_thresh,
+                iou=self.settings.YOLO_IOU_THRESHOLD,
+                imgsz=self.settings.YOLO_IMAGE_SIZE,
+                classes=list(target_class_map.keys()),
+                verbose=False
+            )
 
         latency_ms = (time.time() - start_time) * 1000.0
         self.last_latency_ms = latency_ms
@@ -211,8 +228,29 @@ class YOLOVehicleDetector:
                 xyxy = box.xyxy[0].cpu().numpy().tolist()
                 
                 track_id = int(box.id[0].item()) if box.id is not None else None
-                primary_type = VEHICLE_CLASS_MAP.get(cls_id, "vehicle")
+                primary_type = target_class_map.get(cls_id, "vehicle")
                 bbox_int = [int(v) for v in xyxy]
+                bw = bbox_int[2] - bbox_int[0]
+                bh = bbox_int[3] - bbox_int[1]
+
+                # Smart VisDrone Overhead Aerial Dataset Vehicle Classifier
+                if is_demo:
+                    if cls_id in (1, 3):
+                        primary_type = "motorcycle"
+                    elif cls_id == 0:
+                        if max(bw, bh) < 75 or (bw * bh) < 4500:
+                            primary_type = "motorcycle"
+                        else:
+                            primary_type = "car"
+                    elif cls_id in (67, 72):
+                        if (bw * bh) < 4000:
+                            primary_type = "auto_rickshaw"
+                        else:
+                            primary_type = "car"
+                    elif cls_id == 5:
+                        primary_type = "bus"
+                    elif cls_id in (6, 7):
+                        primary_type = "truck"
                 
                 # Secondary Rickshaw Classifier Evaluation (Confidence-Based)
                 vehicle_type, confidence = rickshaw_classifier.classify_vehicle_crop(

@@ -79,7 +79,7 @@ export default function Header({
         {/* Cameras Status Badge */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 font-semibold">
           <Video className="w-4 h-4 text-[#1976D2]" />
-          <span>{connectedCount} / {totalCameras} Cameras Online</span>
+          <span>{streamMode === 'DEMO' ? '6 / 6 VisDrone Scenarios Online' : `${connectedCount} / ${totalCameras} Cameras Online`}</span>
         </div>
 
         {/* Current Time */}

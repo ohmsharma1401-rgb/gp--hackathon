@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.api import cameras, detections, tracks, anpr, analytics
+from app.api import cameras, detections, tracks, anpr, analytics, demo
+from app.services.demo_manager import demo_camera_manager
 from app.db.database import init_db
 from app.services.stream_manager import stream_manager
 from app.services.catalogue import catalogue_service
@@ -36,10 +37,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Catalogue warmup failed: {e}")
 
+    # 4. Initialize VisDrone Demo Mode Camera Manager
+    try:
+        demo_camera_manager.initialize()
+    except Exception as e:
+        logger.warning(f"DemoCameraManager initialization warning: {e}")
+
     yield
 
     # Cleanup on shutdown
     logger.info("Shutting down CCTV Surveillance Platform Backend...")
+    demo_camera_manager.shutdown()
     stream_manager.stop_all()
     await catalogue_service.close()
     logger.info("Shutdown complete.")
@@ -70,6 +78,7 @@ app.include_router(tracks.router)
 app.include_router(anpr.router)
 app.include_router(analytics.router)
 app.include_router(analytics.events_router)
+app.include_router(demo.router)
 
 # Mount frontend production build statically if available
 dist_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend", "dist")

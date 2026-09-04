@@ -7,8 +7,10 @@ export default function CameraFocusModal({ camera, analytics, onClose, onToggleC
   const [telemetry, setTelemetry] = useState(analytics || null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const isConnected = camera.connection_status === 'CONNECTED' || camera.connection_status === 'CONNECTING';
-  const streamUrl = `/api/cameras/${camera.id}/annotated`;
+  const isConnected = camera.connection_status === 'CONNECTED' || camera.connection_status === 'CONNECTING' || camera.mode === 'VISDRONE_DEMO';
+  const streamUrl = camera.id?.startsWith('CAM-DEMO-') || streamMode === 'DEMO'
+    ? `/api/demo/cameras/${camera.id}/annotated` 
+    : `/api/cameras/${camera.id}/annotated`;
 
   // STEP 8: Active 1000ms polling for /api/analytics/{camera_id} while modal is open
   useEffect(() => {

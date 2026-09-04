@@ -8,6 +8,7 @@ import IncidentCenterPage from './components/IncidentCenterPage';
 import CameraManagementPage from './components/CameraManagementPage';
 import AnprAssessmentPage from './components/AnprAssessmentPage';
 import SystemStatusPage from './components/SystemStatusPage';
+import DemoCamerasPage from './components/DemoCamerasPage';
 import CameraFocusModal from './components/CameraFocusModal';
 import { AlertCircle, Activity, CheckCircle2 } from 'lucide-react';
 
@@ -87,7 +88,7 @@ export default function App() {
       if (!camData && !summaryData) {
         setSystemState('OFFLINE');
         setError('Backend server (localhost:8000) is currently offline.');
-      } else if (onlineCount === 0) {
+      } else if (onlineCount === 0 && streamMode === 'LIVE') {
         setSystemState('DEGRADED');
         setError(null);
       } else {
@@ -210,6 +211,10 @@ export default function App() {
               <p className="text-sm font-semibold text-[#12355B]">Synchronizing Smart City CCTV Command Center...</p>
               <p className="text-xs text-slate-500 mt-1">Establishing secure telemetry & video streaming channels</p>
             </div>
+          ) : streamMode === 'DEMO' ? (
+            <DemoCamerasPage
+              onSelectCamera={(cam) => setSelectedCamera(cam)}
+            />
           ) : (
             <>
               {activeTab === 'dashboard' && (
@@ -273,13 +278,13 @@ export default function App() {
         <footer className="border-t border-slate-200 bg-white py-3 px-6 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 shadow-xs">
           <span className="font-medium text-slate-600">Smart City CCTV Surveillance Command Center · Phase 11 Verified</span>
           <span className="font-mono text-[11px] text-[#1976D2] font-semibold">
-            Mode: {streamMode === 'LIVE' ? '🟢 LIVE GOVERNMENT CCTV' : '🎬 DEMONSTRATION VIDEO MODE'} | Hardware: NVIDIA RTX 4050 CUDA
+            Mode: {streamMode === 'LIVE' ? '🟢 LIVE GOVERNMENT CCTV' : '🎬 VISDRONE (VisDrone2019-VID-val) DEMO MODE'} | Hardware: NVIDIA RTX 4050 CUDA
           </span>
         </footer>
       </div>
 
-      {/* Camera Focus Modal Popup */}
-      {selectedCamera && (
+      {/* Camera Focus Modal Popup (LIVE Government Mode Only) */}
+      {selectedCamera && streamMode === 'LIVE' && (
         <CameraFocusModal
           camera={selectedCamera}
           analytics={selectedCameraAnalytics}

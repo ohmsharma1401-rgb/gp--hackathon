@@ -24,7 +24,11 @@ frontend/build/
 .DS_Store
 Thumbs.db
 
-# Large weights / caches
+# Large weights / dataset archives / videos / evidence
 *.pt
 *.onnx
 *.engine
+*.zip
+demo_videos/
+backend/evidence/
+scratch/

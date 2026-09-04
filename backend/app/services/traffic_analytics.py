@@ -44,6 +44,18 @@ class CameraTrafficAnalytics:
         self.last_update_time: float = time.time()
         self.active_count_samples: List[int] = []
 
+    def reset(self):
+        self.seen_track_ids.clear()
+        self.tracks_history.clear()
+        self.active_tracks.clear()
+        self.events.clear()
+        self.event_cooldowns.clear()
+        self.active_count_samples.clear()
+        for k in self.vehicle_type_counts:
+            self.vehicle_type_counts[k] = 0
+        self.start_time = time.time()
+        self.last_update_time = time.time()
+
     def classify_density(self, active_count: int) -> str:
         if active_count <= 5:
             return "LOW"
@@ -238,10 +250,26 @@ class TrafficAnalyticsEngine:
     def __init__(self):
         self.cameras: Dict[str, CameraTrafficAnalytics] = {}
 
+    def reset(self):
+        self.seen_track_ids.clear()
+        self.tracks_history.clear()
+        self.active_tracks.clear()
+        self.events.clear()
+        self.event_cooldowns.clear()
+        self.active_count_samples.clear()
+        for k in self.vehicle_type_counts:
+            self.vehicle_type_counts[k] = 0
+        self.start_time = time.time()
+        self.last_update_time = time.time()
+
     def get_camera_analytics(self, camera_id: str) -> CameraTrafficAnalytics:
         if camera_id not in self.cameras:
             self.cameras[camera_id] = CameraTrafficAnalytics(camera_id)
         return self.cameras[camera_id]
+
+    def reset_camera_tracking(self, camera_id: str):
+        if camera_id in self.cameras:
+            self.cameras[camera_id].reset()
 
     def update_camera_detections(self, camera_id: str, detections: List[Dict[str, Any]]) -> Dict[str, Any]:
         cam_analytics = self.get_camera_analytics(camera_id)
