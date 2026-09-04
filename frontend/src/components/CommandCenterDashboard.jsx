@@ -177,7 +177,8 @@ export default function CommandCenterDashboard({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {priorityCameras.map((cam) => {
-              const isConnected = cam.connection_status === 'CONNECTED' || cam.connection_status === 'CONNECTING';
+              const status = cam.connection_status || 'OFFLINE';
+              const isConnected = status === 'LIVE' || status === 'CONNECTED' || status === 'CONNECTING';
 
               return (
                 <div
@@ -188,9 +189,14 @@ export default function CommandCenterDashboard({
                   {/* Card Header */}
                   <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-live-pulse" />
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 uppercase">
-                        LIVE
+                      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-live-pulse' : 'bg-slate-400'}`} />
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded border uppercase ${
+                        status === 'LIVE' || status === 'CONNECTED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        status === 'CONNECTING' ? 'bg-sky-50 text-sky-700 border-sky-200' :
+                        status === 'RECONNECTING' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                        'bg-slate-200 text-slate-600 border-slate-300'
+                      }`}>
+                        {status === 'LIVE' || status === 'CONNECTED' ? 'LIVE' : status}
                       </span>
                       <span className="text-xs font-bold text-[#12355B] truncate">{cam.name || cam.id}</span>
                     </div>
@@ -222,8 +228,12 @@ export default function CommandCenterDashboard({
                       <div className="p-3 bg-blue-50 rounded-full text-[#1976D2] mb-2">
                         <Video className="w-6 h-6 animate-pulse" />
                       </div>
-                      <span className="text-xs font-bold text-[#12355B]">● CONNECTING TO LIVE CCTV</span>
-                      <span className="text-[11px] text-slate-500 mt-1 font-medium">Establishing secure video stream...</span>
+                      <span className="text-xs font-bold text-[#12355B]">
+                        {status === 'STREAM_ERROR' ? '⚠️ STREAM UNAVAILABLE' : '● CONNECTING TO LIVE CCTV'}
+                      </span>
+                      <span className="text-[11px] text-slate-500 mt-1 font-medium">
+                        {status === 'STREAM_ERROR' ? 'RTSP authorization required or feed unreadable' : 'Establishing secure video stream...'}
+                      </span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -235,7 +245,7 @@ export default function CommandCenterDashboard({
                         }}
                         className="mt-3 px-3.5 py-1.5 bg-[#1976D2] hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-all"
                       >
-                        Retry Connection
+                        Reconnect Camera
                       </button>
                     </div>
                   </div>
@@ -244,7 +254,7 @@ export default function CommandCenterDashboard({
                   <div className="p-3 bg-white border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 font-medium">
                     <span className="flex items-center gap-1 text-slate-700 font-semibold">
                       <Car className="w-3.5 h-3.5 text-[#1976D2]" />
-                      Vehicles: 4
+                      Active Stream
                     </span>
                     <span className="text-emerald-700 font-semibold">Traffic: LOW</span>
                     <span className="text-[#1976D2] font-semibold group-hover:underline flex items-center gap-1">

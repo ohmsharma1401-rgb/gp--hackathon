@@ -205,8 +205,9 @@ async def get_camera(camera_id: str):
         raise HTTPException(status_code=404, detail=f"Camera ID '{camera_id}' not found in catalogue.")
     
     worker = stream_manager.get_worker(camera_id)
-    cam["stream_telemetry"] = worker.get_status() if worker else None
-    cam["connection_status"] = worker.status if worker else "DISCONNECTED"
+    status_info = worker.get_status() if worker else None
+    cam["stream_telemetry"] = status_info
+    cam["connection_status"] = status_info["status"] if status_info else "OFFLINE"
     return cam
 
 @router.post("/{camera_id}/connect")
@@ -232,6 +233,31 @@ async def disconnect_camera(camera_id: str):
     if not stopped:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' was not actively streaming.")
     return {"status": "SUCCESS", "message": f"Stream worker stopped for camera '{camera_id}'"}
+
+@router.get("/{camera_id}/health")
+async def get_camera_health(camera_id: str):
+    """
+    PHASE 12 TASK 12 API: Return camera health telemetry for GPU, RTSP, FPS, and streaming status.
+    """
+    worker = stream_manager.get_worker(camera_id)
+    if not worker:
+        cam = await catalogue_service.get_camera_by_id(camera_id)
+        if not cam:
+            raise HTTPException(status_code=404, detail=f"Camera ID '{camera_id}' not found in catalogue.")
+        from app.services.yolo_service import yolo_detector
+        return {
+            "camera_id": camera_id,
+            "connection": "OFFLINE",
+            "streaming": False,
+            "frames_received": 0,
+            "fps": 0.0,
+            "resolution": "N/A",
+            "last_frame_age_ms": None,
+            "gpu": yolo_detector.device_name,
+            "cuda": yolo_detector.cuda_available,
+            "error": "Stream worker not started"
+        }
+    return worker.get_health()
 
 @router.get("/{camera_id}/stream-status")
 async def get_camera_stream_status(camera_id: str):

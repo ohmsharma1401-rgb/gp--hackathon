@@ -10,8 +10,8 @@ from app.services.yolo_service import yolo_detector
 
 logger = logging.getLogger(__name__)
 
-# Force TCP and 5s timeout for RTSP stability in ffmpeg backend
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
+# Force TCP and 2s timeout for RTSP stability in ffmpeg backend
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;2000000"
 
 class RTSPStreamWorker:
     def __init__(self, camera_id: str, rtsp_url: str):
@@ -43,6 +43,34 @@ class RTSPStreamWorker:
         # FPS calculation window
         self._fps_window = deque(maxlen=30)
         self._frame_counter = 0
+
+    def get_health(self) -> Dict[str, Any]:
+        """Task 12: Camera Health Telemetry Endpoint data provider."""
+        now = time.time()
+        age_ms = int((now - self.last_frame_timestamp) * 1000.0) if self.last_frame_timestamp else None
+        is_streaming = self.is_frame_delivery_active(max_stale_seconds=5.0)
+
+        if is_streaming:
+            conn_state = "CONNECTED"
+        elif self.status == "CONNECTING":
+            conn_state = "CONNECTING"
+        elif self.status == "RECONNECTING":
+            conn_state = "RECONNECTING"
+        else:
+            conn_state = "OFFLINE"
+
+        return {
+            "camera_id": self.camera_id,
+            "connection": conn_state,
+            "streaming": is_streaming,
+            "frames_received": self.frames_received,
+            "fps": round(self.fps, 1),
+            "resolution": f"{self.resolution[0]}x{self.resolution[1]}" if self.resolution != (0, 0) else "N/A",
+            "last_frame_age_ms": age_ms,
+            "gpu": yolo_detector.device_name,
+            "cuda": yolo_detector.cuda_available,
+            "error": self.error_message
+        }
 
     def start(self):
         """Start the background stream ingestion thread."""
@@ -82,13 +110,37 @@ class RTSPStreamWorker:
         with self._buffer_lock:
             return list(self.recent_detections)
 
+    def is_frame_delivery_active(self, max_stale_seconds: float = 5.0) -> bool:
+        """
+        Step 8: Heartbeat Check.
+        Returns True ONLY if stream is CONNECTED and a frame was received within max_stale_seconds.
+        """
+        if self.status != "CONNECTED" or self.last_frame_timestamp is None:
+            return False
+        return (time.time() - self.last_frame_timestamp) <= max_stale_seconds
+
     def get_status(self) -> Dict[str, Any]:
         """Return real-time stream status and telemetry metrics."""
+        is_active = self.is_frame_delivery_active(max_stale_seconds=5.0)
         has_frame = len(self._annotated_frame_buffer) > 0 or len(self._raw_frame_buffer) > 0
+        
+        # Determine strict camera connection status for frontend
+        if is_active:
+            effective_status = "LIVE"
+        elif self.status == "CONNECTING":
+            effective_status = "CONNECTING"
+        elif self.status == "RECONNECTING":
+            effective_status = "RECONNECTING"
+        elif self.status in ("ERROR", "DISCONNECTED"):
+            effective_status = "STREAM_ERROR"
+        else:
+            effective_status = "FRAME_DELIVERY_ERROR"
+
         return {
             "camera_id": self.camera_id,
             "rtsp_status": self.status,
-            "status": self.status,
+            "status": effective_status,
+            "is_frame_delivery_active": is_active,
             "worker_running": self._thread is not None and self._thread.is_alive(),
             "frames_received": self.frames_received,
             "latest_frame_available": has_frame,
@@ -114,10 +166,23 @@ class RTSPStreamWorker:
             cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
             is_fallback = False
             
-            if not cap.isOpened() or not cap.grab():
-                sample_mp4 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "scratch", "controlled_vehicle_test.mp4"))
+            # Task 1 & 2: Test if RTSP produces valid frames; if 401 Unauthorized or unreadable, activate fallback
+            ret_test = False
+            frame_test = None
+            if cap.isOpened():
+                ret_test, frame_test = cap.read()
+
+            if not ret_test or frame_test is None:
+                if cap.isOpened():
+                    cap.release()
+                
+                base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+                sample_mp4 = os.path.join(base_dir, "scratch", "controlled_vehicle_test.mp4")
+                if not os.path.exists(sample_mp4):
+                    sample_mp4 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "scratch", "controlled_vehicle_test.mp4"))
+                
                 if os.path.exists(sample_mp4):
-                    logger.info(f"[{self.camera_id}] Live RTSP feed unavailable. Opening local CCTV demonstration video source: {sample_mp4}")
+                    logger.info(f"[{self.camera_id}] Live RTSP feed unreadable/rejected (401). Opening local CCTV demonstration video: {sample_mp4}")
                     cap = cv2.VideoCapture(sample_mp4)
                     is_fallback = True
 
